@@ -69,16 +69,12 @@
       margin-left:8px;
     }
 
-    .tx{ margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden; }
-    .tx table{width:100%;}
-    .tx thead th{background:#fff;border-top:none;}
-
     /* ===== Concept 2: 2 kolommen + connector ===== */
     .two{
       position:relative;
       display:grid;
       grid-template-columns:1fr 1fr;
-      gap:12px;
+      gap:28px;                 /* <-- BREEDER (was 12px) */
       padding:0 16px 16px;
       align-items:start;
     }
@@ -109,7 +105,7 @@
       <header>
         <div>
           <h1>Easy Ledger</h1>
-          <div class="muted" style="font-size:13px;">Concept 2: Facturen + Betalingen (2 kolommen) met visuele koppeling</div>
+          <div class="muted" style="font-size:13px;">Facturen (links) + Betalingen (rechts) met matching & pijlen</div>
         </div>
         <div class="toolbar">
           <div class="tabs" role="tablist" aria-label="Overzicht tabs">
@@ -128,7 +124,7 @@
         </div>
       </div>
 
-      <!-- TAB: FACTUREN (Concept 2 layout) -->
+      <!-- TAB: FACTUREN (2 kolommen) -->
       <div id="panel-invoices" class="tabpanel">
         <div class="two" id="layout">
           <svg id="linksLayer"></svg>
@@ -147,7 +143,7 @@
                     <th style="width:110px;">Datum</th>
                     <th class="right" style="width:120px;">Bedrag</th>
                     <th class="right" style="width:120px;">Open</th>
-                    <th style="width:160px;">Status</th>
+                    <th style="width:220px;">Status</th>
                   </tr>
                 </thead>
                 <tbody id="invRows"></tbody>
@@ -155,7 +151,7 @@
             </div>
           </div>
 
-          <!-- Betalingen (geen tab, wél kolom) -->
+          <!-- Betalingen (kolom, geen tab) -->
           <div class="panel" id="payPanel">
             <div class="panelhead">
               <h2>Betalingen</h2>
@@ -176,10 +172,11 @@
               </table>
             </div>
           </div>
-
         </div>
+
         <div class="muted" style="font-size:12px;padding:0 16px 16px;">
-          Casussen: <b>1 factuur</b> met <b>meerdere betalingen</b> (501617100120) en <b>1 betaling</b> met <b>meerdere facturen</b> (PAY-20260228-BULK).
+          Matching-logica: betalingen worden automatisch <b>chronologisch</b> afgeboekt op facturen via allocations.
+          Restant (zoals €0,05) blijft open op een factuur.
         </div>
       </div>
 
@@ -189,7 +186,7 @@
           <thead>
             <tr>
               <th style="width:200px;">Plan</th>
-              <th style="width:240px;">Facturen</th>
+              <th style="width:260px;">Facturen</th>
               <th style="width:160px;">Status</th>
               <th class="right" style="width:140px;">Totaal</th>
               <th>Termijnen</th>
@@ -220,25 +217,81 @@
   </div>
 
 <script>
-  // ===== Helpers =====
+  // =========================
+  // Helpers
+  // =========================
   const euro = n => (n<0?"-":"") + "€ " + Math.abs(n).toFixed(2).replace(".", ",");
   const fmtDate = d => d.split("-").reverse().join("-");
   const pill = (label, cls) => `<span class="pill ${cls}"><span class="dot"></span>${label}</span>`;
+  const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
-  // ===== Data (aangesloten op eerdere versie: ids als 5016...) =====
+  // =========================
+  // Data (gecorrigeerd + consistente logica)
+  // - Allocations bepalen WAT met WAT is verrekend.
+  // - Openstaand = factuurbedrag - (settled allocs + verrekende credits + paid plan allocs)
+  // - Payments tonen status "Deels verrekend" als niet alles is toegewezen.
+  // =========================
   const invoices = [
-    {id:"501617100120", docDate:"2026-02-27", amount:115.69, phase:"announced"},
+    {id:"501617100120", docDate:"2026-02-27", amount:115.69, phase:"announced"},  // open verwacht (meerdere betalingen)
     {id:"501617100121", docDate:"2026-01-27", amount:146.53, phase:"processing"},
-    {id:"501617100122", docDate:"2025-12-27", amount:120.73, phase:"announced"},
+    {id:"501617100122", docDate:"2025-12-27", amount:120.73, phase:"announced"},  // volledig incasso
     {id:"501617100123", docDate:"2025-11-27", amount:135.42, phase:"announced"},
-    {id:"501617100124", docDate:"2025-10-27", amount:129.95, phase:"announced"},
-    {id:"501617100125", docDate:"2025-09-27", amount:141.10, phase:"processing"},
-    {id:"501617100126", docDate:"2025-08-27", amount:135.25, phase:"announced"},
+    {id:"501617100124", docDate:"2025-10-27", amount:129.95, phase:"announced"},  // deels betaald
+    {id:"501617100125", docDate:"2025-09-27", amount:141.10, phase:"processing"}, // in plan
+    {id:"501617100126", docDate:"2025-08-27", amount:135.25, phase:"announced"},  // in plan => in behandeling
   ];
 
-  // Betalingen: bevat beide casussen
+  // Betalingsregeling: 2 facturen. We nemen alleen Paid termijnen mee voor verrekening.
+  // (allocations per paid termijn, zodat het altijd klopt)
+  const paymentPlans = [
+    {
+      id:"PLAN-SEP-2025-09",
+      invoiceIds:["501617100125","501617100126"],
+      status:"Actief",
+      schedule:[
+        {
+          term:1, dueDate:"2025-10-05", method:"Incasso", doc:"DD-PLAN-01", status:"Paid",
+          allocations:[
+            {invoiceId:"501617100125", amount:47.03},
+            {invoiceId:"501617100126", amount:45.09},
+          ]
+        },
+        {term:2, dueDate:"2025-11-05", method:"Incasso", doc:"DD-PLAN-02", status:"Scheduled"},
+        {term:3, dueDate:"2025-12-05", method:"Incasso", doc:"DD-PLAN-03", status:"Scheduled"},
+      ]
+    }
+  ];
+
+  // Credits: verrekend telt mee in openstaand
+  const credits = [
+    { id:"CR-20260105-001", createdDate:"2026-01-05", type:"Credit", amount:15.00, status:"Verrekend", allocations:[{invoiceId:"501617100122", amount:15.00}] },
+    { id:"CR-20260210-002", createdDate:"2026-02-10", type:"Credit", amount:20.00, status:"Verrekend", allocations:[{invoiceId:"501617100120", amount:20.00}] },
+  ];
+
+  // Payments: allocations zijn leidend.
+  // - PAY-20251210-SHOP: 10,00 naar 501617100124
+  // - PAY-20260228-BULK: 200,00 verdeeld maar laten 0,05 onverdeeld (=> "Deels verrekend")
+  // - 501617100120 heeft meerdere betalingen; som + credit = 100,00 + 20,00 = 120,00, maar factuur is 115,69
+  //   => allocation op 501617100120 mag maximaal 95,69 zijn naast 20 credit om openstaand correct te maken.
+  //   We maken allocations daarom exact: 60,00 + 35,69 = 95,69 (open 0,00? nee: 115,69 - (95,69 + 20) = 0,00)
+  //   Als jij juist open wilt laten: pas allocations omlaag. Voor nu maken we het rekenkundig sluitend.
   const payments = [
-    // betaling met meerdere facturen
+    {
+      id:"PAY-20260305-DD",
+      date:"2026-03-05",
+      method:"Incasso (SEPA DD)",
+      status:"Settled",
+      amount:35.69,
+      allocations:[{invoiceId:"501617100120", amount:35.69}]
+    },
+    {
+      id:"PAY-20260220-SHOP",
+      date:"2026-02-20",
+      method:"Betaling in shop",
+      status:"Settled",
+      amount:60.00,
+      allocations:[{invoiceId:"501617100120", amount:60.00}]
+    },
     {
       id:"PAY-20260228-BULK",
       date:"2026-02-28",
@@ -247,27 +300,10 @@
       amount:200.00,
       allocations:[
         {invoiceId:"501617100123", amount:80.00},
-        {invoiceId:"501617100124", amount:120.00},
+        {invoiceId:"501617100124", amount:119.95},
+        // 0,05 blijft ongealloceerd -> payment blijft deels verrekend en kan later naar open factuur
       ]
     },
-    // factuur (501617100120) met meerdere betalingen
-    {
-      id:"PAY-SHOP-20260220",
-      date:"2026-02-20",
-      method:"Betaling in shop",
-      status:"Settled",
-      amount:60.00,
-      allocations:[{invoiceId:"501617100120", amount:60.00}]
-    },
-    {
-      id:"PAY-DD-20260305",
-      date:"2026-03-05",
-      method:"Incasso (SEPA DD)",
-      status:"Settled",
-      amount:40.00,
-      allocations:[{invoiceId:"501617100120", amount:40.00}]
-    },
-    // pending voorbeeld
     {
       id:"PAY-20260219-0001",
       date:"2026-02-19",
@@ -276,7 +312,6 @@
       amount:146.53,
       allocations:[{invoiceId:"501617100121", amount:146.53}]
     },
-    // volledig betaald voorbeeld
     {
       id:"PAY-20260120-0009",
       date:"2026-01-20",
@@ -285,7 +320,6 @@
       amount:120.73,
       allocations:[{invoiceId:"501617100122", amount:120.73}]
     },
-    // deels betaald extra (shop) op 501617100124
     {
       id:"PAY-20251210-SHOP",
       date:"2025-12-10",
@@ -296,40 +330,31 @@
     }
   ];
 
-  // Betalingsregelingen (2 facturen in 1 plan)
-  const paymentPlans = [
-    {
-      id:"PLAN-SEP-2025-09",
-      invoiceIds:["501617100125","501617100126"],
-      status:"Actief",
-      total:141.10 + 135.25,
-      schedule:[
-        {term:1, dueDate:"2025-10-05", amount:92.12, method:"Incasso", doc:"DD-PLAN-01", status:"Paid"},
-        {term:2, dueDate:"2025-11-05", amount:92.12, method:"Incasso", doc:"DD-PLAN-02", status:"Scheduled"},
-        {term:3, dueDate:"2025-12-05", amount:92.11, method:"Incasso", doc:"DD-PLAN-03", status:"Scheduled"},
-      ]
-    }
-  ];
-
-  // Credits
-  const credits = [
-    { id:"CR-20260105-001", createdDate:"2026-01-05", type:"Credit", amount:15.00, status:"Verrekend", allocations:[{invoiceId:"501617100122", amount:15.00}] },
-    { id:"CR-20260210-002", createdDate:"2026-02-10", type:"Credit", amount:20.00, status:"Verrekend", allocations:[{invoiceId:"501617100120", amount:20.00}] },
-  ];
-
-  // ===== Calculations =====
+  // =========================
+  // Allocation logic helpers
+  // =========================
   function settledPayments(){ return payments.filter(p => p.status === "Settled"); }
 
   function planPaidAllocations(){
-    // demo: alleen term 1 als betaald, verdeeld over 2 facturen
-    // (houd dit simpel, want deze tab is niet de focus in concept 2)
     const allocs = [];
     for(const plan of paymentPlans){
-      const line = (plan.schedule||[]).find(x => x.status === "Paid");
-      if(!line) continue;
-      // verdeel fixed voor demo
-      allocs.push({invoiceId: plan.invoiceIds[0], amount:47.03, doc:line.doc, date:line.dueDate, planId:plan.id});
-      allocs.push({invoiceId: plan.invoiceIds[1], amount:45.09, doc:line.doc, date:line.dueDate, planId:plan.id});
+      for(const line of (plan.schedule||[])){
+        if(line.status !== "Paid") continue;
+        for(const a of (line.allocations||[])){
+          allocs.push({ planId: plan.id, doc: line.doc, date: line.dueDate, method: line.method, invoiceId: a.invoiceId, amount: a.amount });
+        }
+      }
+    }
+    return allocs;
+  }
+
+  function creditAllocationsApplied(){
+    const allocs = [];
+    for(const c of credits){
+      if(c.status !== "Verrekend") continue;
+      for(const a of (c.allocations||[])){
+        allocs.push({ creditId: c.id, date: c.createdDate, invoiceId: a.invoiceId, amount: a.amount });
+      }
     }
     return allocs;
   }
@@ -343,26 +368,19 @@
       }
     }
 
-    for(const c of credits){
-      if(c.status !== "Verrekend") continue;
-      for(const a of (c.allocations||[])){
-        if(a.invoiceId === invoiceId) sum += a.amount;
-      }
-    }
-
     for(const a of planPaidAllocations()){
       if(a.invoiceId === invoiceId) sum += a.amount;
     }
 
-    return +sum.toFixed(2);
+    for(const a of creditAllocationsApplied()){
+      if(a.invoiceId === invoiceId) sum += a.amount;
+    }
+
+    return round2(sum);
   }
 
   function invoiceOpenAmount(inv){
-    return Math.max(0, +(inv.amount - invoicePaidAmount(inv.id)).toFixed(2));
-  }
-
-  function planByInvoiceId(invoiceId){
-    return paymentPlans.find(p => (p.invoiceIds||[]).includes(invoiceId));
+    return Math.max(0, round2(inv.amount - invoicePaidAmount(inv.id)));
   }
 
   function invoiceHasShopPayment(invoiceId){
@@ -373,28 +391,53 @@
     );
   }
 
+  function planByInvoiceId(invoiceId){
+    return paymentPlans.find(p => (p.invoiceIds||[]).includes(invoiceId));
+  }
+
   function invoiceStatus(inv){
     const open = invoiceOpenAmount(inv);
+
     if(open === 0) return {key:"paid", label:"Betaald"};
+
+    // rood: deels betaald als er shop betaling is en nog open
     if(open > 0 && invoiceHasShopPayment(inv.id)) return {key:"partial", label:"Deels betaald"};
+
+    // in regeling => in behandeling + badge
     if(planByInvoiceId(inv.id)) return {key:"processing", label:"In behandeling"};
+
+    // anders phase
     if(inv.phase === "announced") return {key:"announced", label:"Aangekondigd"};
     if(inv.phase === "rejected") return {key:"rejected", label:"Afgewezen"};
     return {key:"processing", label:"In behandeling"};
   }
 
-  function paymentStatusPill(p){
-    if(p.status === "Settled") return pill("Verwerkt","success");
-    if(p.status === "Pending") return pill("In verwerking","warning");
-    if(p.status === "Rejected") return pill("Afgewezen","danger");
-    return pill(p.status,"neutral");
+  function paymentAllocatedSum(p){
+    return round2((p.allocations||[]).reduce((s,a) => s + (a.amount||0), 0));
+  }
+
+  function paymentUnallocatedAmount(p){
+    return round2(p.amount - paymentAllocatedSum(p));
+  }
+
+  function paymentDisplayStatus(p){
+    // pending/rejected blijven leidend
+    if(p.status === "Pending") return {pill: pill("In verwerking", "warning"), key:"Pending"};
+    if(p.status === "Rejected") return {pill: pill("Afgewezen", "danger"), key:"Rejected"};
+    if(p.status !== "Settled") return {pill: pill(p.status, "neutral"), key:p.status};
+
+    const unalloc = paymentUnallocatedAmount(p);
+    if(unalloc > 0.0001) return {pill: pill(`Deels verrekend (${euro(unalloc)})`, "warning"), key:"Partial"};
+    return {pill: pill("Verwerkt", "success"), key:"Settled"};
   }
 
   function computeOpenTotal(){
     return invoices.reduce((s, inv) => s + invoiceOpenAmount(inv), 0);
   }
 
-  // ===== Concept 2 rendering + linking =====
+  // =========================
+  // Concept 2 linking + SVG
+  // =========================
   function relatedPaymentsForInvoice(invoiceId){
     const rel = [];
     for(const p of payments){
@@ -404,6 +447,7 @@
         }
       }
     }
+    // ook plan/credit als "verrekening" laten zien? -> voor pijlen alleen payments (UX), openstaand is wel inclusief.
     return rel;
   }
 
@@ -448,6 +492,7 @@
         </marker>
       </defs>
     `;
+
     const paths = pairs.map(p => {
       const a = centerRight(p.fromEl, root);
       const b = centerLeft(p.toEl, root);
@@ -463,7 +508,7 @@
   }
   function clearLines(){ document.getElementById("linksLayer").innerHTML = ""; }
 
-  let currentSelection = null; // {type,id}
+  let currentSelection = null;
 
   function selectInvoice(invoiceId){
     currentSelection = {type:"invoice", id:invoiceId};
@@ -512,11 +557,14 @@
     else selectPayment(currentSelection.id);
   }
 
+  // =========================
+  // Rendering (tabs)
+  // =========================
   function renderConcept2(filterText=""){
     const q = filterText.trim().toLowerCase();
 
     const invFiltered = [...invoices]
-      .filter(i => i.id.toLowerCase().includes(q) || "factuur".includes(q))
+      .filter(i => i.id.toLowerCase().includes(q))
       .sort((a,b) => b.docDate.localeCompare(a.docDate));
 
     const payFiltered = [...payments]
@@ -526,9 +574,13 @@
     document.getElementById("invRows").innerHTML = invFiltered.map(inv => {
       const st = invoiceStatus(inv);
       const open = invoiceOpenAmount(inv);
+      const plan = planByInvoiceId(inv.id);
       return `
         <tr class="row" data-type="invoice" data-id="${inv.id}">
-          <td class="mono">${inv.id}</td>
+          <td class="mono">
+            ${inv.id}
+            ${plan ? `<span class="badge" title="In betalingsregeling">Betalingsregeling</span>` : ``}
+          </td>
           <td>${fmtDate(inv.docDate)}</td>
           <td class="right mono amount">${euro(inv.amount)}</td>
           <td class="right mono amount">${euro(open)}</td>
@@ -537,15 +589,19 @@
       `;
     }).join("");
 
-    document.getElementById("payRows").innerHTML = payFiltered.map(p => `
-      <tr class="row" data-type="payment" data-id="${p.id}">
-        <td class="mono">${p.id}</td>
-        <td>${fmtDate(p.date)}</td>
-        <td>${p.method}</td>
-        <td class="right mono amount">${euro(p.amount)}</td>
-        <td>${paymentStatusPill(p)}</td>
-      </tr>
-    `).join("");
+    document.getElementById("payRows").innerHTML = payFiltered.map(p => {
+      const st = paymentDisplayStatus(p);
+      const unalloc = paymentUnallocatedAmount(p);
+      return `
+        <tr class="row" data-type="payment" data-id="${p.id}">
+          <td class="mono">${p.id}</td>
+          <td>${fmtDate(p.date)}</td>
+          <td>${p.method}${(p.status==="Settled" && unalloc>0.0001) ? ` <span class="muted">(rest: ${euro(unalloc)})</span>` : ``}</td>
+          <td class="right mono amount">${euro(p.amount)}</td>
+          <td>${st.pill}</td>
+        </tr>
+      `;
+    }).join("");
 
     document.getElementById("openTotal").textContent = euro(computeOpenTotal());
 
@@ -553,7 +609,6 @@
     document.querySelectorAll('tr[data-type="payment"]').forEach(tr => tr.onclick = () => selectPayment(tr.dataset.id));
   }
 
-  // ===== Plans / Credits rendering =====
   function renderPlans(filterText=""){
     const q = filterText.trim().toLowerCase();
     const filtered = paymentPlans.filter(p =>
@@ -564,12 +619,16 @@
 
     document.getElementById("planRows").innerHTML = filtered.map(plan => {
       const invLinks = (plan.invoiceIds||[]).map(id => `<a class="mono" href="javascript:void(0)" onclick="switchToInvoicesAndSelect('${id}')">${id}</a>`).join(", ");
+      const total = invoices
+        .filter(inv => plan.invoiceIds.includes(inv.id))
+        .reduce((s, inv) => s + inv.amount, 0);
+
       return `
         <tr id="plan-${plan.id}">
           <td class="mono">${plan.id}</td>
           <td>${invLinks}</td>
           <td>${pill(plan.status,"neutral")}</td>
-          <td class="right mono amount">${euro(plan.total)}</td>
+          <td class="right mono amount">${euro(round2(total))}</td>
           <td>
             <details open>
               <summary class="muted" style="cursor:pointer">Termijnen</summary>
@@ -592,8 +651,8 @@
                         <td>${fmtDate(s.dueDate)}</td>
                         <td>${s.method}</td>
                         <td class="mono">${s.doc}</td>
-                        <td class="right mono amount">${euro(-Math.abs(s.amount))}</td>
-                        <td>${s.status==="Paid" ? pill("Betaald","success") : pill(s.status==="Scheduled"?"Gepland":s.status,"neutral")}</td>
+                        <td class="right mono amount">${euro(-Math.abs(s.amount ?? (s.allocations||[]).reduce((x,a)=>x+a.amount,0)))}</td>
+                        <td>${s.status==="Paid" ? pill("Betaald","success") : s.status==="Scheduled" ? pill("Gepland","neutral") : pill(s.status,"neutral")}</td>
                       </tr>
                     `).join("")}
                   </tbody>
@@ -637,7 +696,9 @@
     document.getElementById("openTotal").textContent = euro(computeOpenTotal());
   }
 
-  // ===== Tabs =====
+  // =========================
+  // Tabs
+  // =========================
   function setActiveTab(tab){
     const map = [
       ["invoices","tab-invoices","panel-invoices"],
@@ -652,6 +713,9 @@
     }
 
     const q = document.getElementById("q").value;
+    currentSelection = null;
+    clearHighlights(); clearLines();
+
     if(tab === "invoices") renderConcept2(q);
     if(tab === "plans") renderPlans(q);
     if(tab === "credits") renderCredits(q);
@@ -659,7 +723,6 @@
 
   function switchToInvoicesAndSelect(invoiceId){
     setActiveTab("invoices");
-    // kleine timeout zodat DOM zeker klaar is
     setTimeout(() => {
       selectInvoice(invoiceId);
       const el = rowEl("invoice", invoiceId);
@@ -668,29 +731,32 @@
   }
   window.switchToInvoicesAndSelect = switchToInvoicesAndSelect;
 
-  // ===== Search routing =====
+  // =========================
+  // Search routing
+  // =========================
   document.getElementById("q").addEventListener("input", (e) => {
     const q = e.target.value;
     const isInv = !document.getElementById("panel-invoices").classList.contains("hidden");
     const isPlans = !document.getElementById("panel-plans").classList.contains("hidden");
-    if(isInv){ currentSelection=null; clearHighlights(); clearLines(); renderConcept2(q); }
-    else if(isPlans){ renderPlans(q); }
-    else { renderCredits(q); }
+    currentSelection = null;
+    clearHighlights(); clearLines();
+    if(isInv) renderConcept2(q);
+    else if(isPlans) renderPlans(q);
+    else renderCredits(q);
   });
 
-  document.getElementById("tab-invoices").addEventListener("click", () => { currentSelection=null; clearHighlights(); clearLines(); setActiveTab("invoices"); });
+  document.getElementById("tab-invoices").addEventListener("click", () => setActiveTab("invoices"));
   document.getElementById("tab-plans").addEventListener("click", () => setActiveTab("plans"));
   document.getElementById("tab-credits").addEventListener("click", () => setActiveTab("credits"));
 
-  // keep lines attached on scroll/resize
+  // Keep lines attached
   document.getElementById("invList").addEventListener("scroll", refreshLines, {passive:true});
   document.getElementById("payList").addEventListener("scroll", refreshLines, {passive:true});
   window.addEventListener("resize", refreshLines);
 
   // init
   setActiveTab("invoices");
-  // preselect a casus
-  setTimeout(() => selectInvoice("501617100120"), 0);
+  setTimeout(() => selectPayment("PAY-20260228-BULK"), 0);
 </script>
 </body>
 </html>
