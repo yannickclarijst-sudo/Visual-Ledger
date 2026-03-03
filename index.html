@@ -1,1 +1,696 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Easy Ledger — Concept 2 (2 kolommen) + tabs</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280;
+      --line:#e5e7eb; --blue:#2563eb; --green:#16a34a; --amber:#d97706; --red:#dc2626; --purple:#7c3aed;
+      --slate:#334155;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px;}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden;}
+    header{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:16px 16px 8px;}
+    header h1{font-size:18px;margin:0;}
+    .toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+    input[type="search"]{padding:10px 12px;border:1px solid var(--line);border-radius:10px;min-width:280px;}
+    .sub{padding:0 16px 16px;color:var(--muted);font-size:13px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+    .kpis{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .kpi{display:inline-flex;align-items:baseline;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#fafafa;font-size:12px;color:var(--muted);}
+    .kpi b{color:var(--text);font-size:14px;}
 
+    .tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .tabbtn{
+      border:1px solid var(--line);background:#fff;color:var(--text);
+      padding:8px 10px;border-radius:10px;font-size:13px;cursor:pointer;
+    }
+    .tabbtn.active{border-color:rgba(37,99,235,.35);box-shadow:0 0 0 3px rgba(37,99,235,.10);}
+
+    .tabpanel{padding:0 16px 16px;}
+    .hidden{display:none;}
+
+    table{width:100%;border-collapse:separate;border-spacing:0;}
+    thead th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left;
+      padding:10px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fafafa;
+    }
+    tbody td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top;}
+    tbody tr:hover{background:#fbfdff;}
+    .mono{font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;}
+    .amount{white-space:nowrap;}
+    .right{text-align:right;}
+    a{color:var(--blue);text-decoration:none;}
+    a:hover{text-decoration:underline;}
+    .muted{color:var(--muted);}
+
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;
+      font-size:12px;font-weight:600;border:1px solid transparent;white-space:nowrap;
+    }
+    .dot{width:8px;height:8px;border-radius:99px;background:currentColor;display:inline-block;}
+    .pill.paid{color:var(--green); background:rgba(22,163,74,.10); border-color:rgba(22,163,74,.18);}
+    .pill.processing{color:var(--amber); background:rgba(217,119,6,.12); border-color:rgba(217,119,6,.22);}
+    .pill.announced{color:var(--blue); background:rgba(37,99,235,.10); border-color:rgba(37,99,235,.18);}
+    .pill.rejected{color:var(--red); background:rgba(220,38,38,.10); border-color:rgba(220,38,38,.18);}
+    .pill.partial{color:var(--red); background:rgba(220,38,38,.10); border-color:rgba(220,38,38,.20);}
+    .pill.success{color:var(--green); background:rgba(22,163,74,.10); border-color:rgba(22,163,74,.18);}
+    .pill.warning{color:var(--amber); background:rgba(217,119,6,.12); border-color:rgba(217,119,6,.22);}
+    .pill.danger{color:var(--red); background:rgba(220,38,38,.10); border-color:rgba(220,38,38,.18);}
+    .pill.neutral{color:var(--slate); background:rgba(51,65,85,.08); border-color:rgba(51,65,85,.16);}
+
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 8px;border-radius:999px;
+      font-size:12px;font-weight:600;
+      color:var(--purple); background:rgba(124,58,237,.10); border:1px solid rgba(124,58,237,.18);
+      margin-left:8px;
+    }
+
+    .tx{ margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden; }
+    .tx table{width:100%;}
+    .tx thead th{background:#fff;border-top:none;}
+
+    /* ===== Concept 2: 2 kolommen + connector ===== */
+    .two{
+      position:relative;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      padding:0 16px 16px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .two{grid-template-columns:1fr;}
+      #linksLayer{display:none;}
+    }
+    #linksLayer{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:5;
+    }
+    .panel{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;min-height:540px;}
+    .panelhead{display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid var(--line);background:#fafafa;}
+    .panelhead h2{font-size:13px;margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .panelhead .hint{font-size:12px;color:var(--muted)}
+    .list{max-height:520px;overflow:auto;}
+    .stickyhead thead th{position:sticky;top:0;z-index:2;background:#fff;border-top:none;}
+    .row{cursor:pointer; position:relative;}
+    .row:hover{background:#fbfdff;}
+    .row.selected{background:rgba(37,99,235,.12)!important; outline:2px solid rgba(37,99,235,.55); outline-offset:-2px;}
+    .row.related{background:rgba(37,99,235,.08)!important; outline:2px solid rgba(37,99,235,.25); outline-offset:-2px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <div>
+          <h1>Easy Ledger</h1>
+          <div class="muted" style="font-size:13px;">Concept 2: Facturen + Betalingen (2 kolommen) met visuele koppeling</div>
+        </div>
+        <div class="toolbar">
+          <div class="tabs" role="tablist" aria-label="Overzicht tabs">
+            <button class="tabbtn active" id="tab-invoices" data-tab="invoices" role="tab" aria-selected="true">Facturen</button>
+            <button class="tabbtn" id="tab-plans" data-tab="plans" role="tab" aria-selected="false">Betalingsregelingen</button>
+            <button class="tabbtn" id="tab-credits" data-tab="credits" role="tab" aria-selected="false">Credit/Debit</button>
+          </div>
+          <input id="q" type="search" placeholder="Zoek op factuur/betaling/plan/credit…" />
+        </div>
+      </header>
+
+      <div class="sub">
+        <div>Regels: N/A &nbsp; Dunning: N/A</div>
+        <div class="kpis">
+          <div class="kpi"><span>Totaal openstaand</span><b id="openTotal">€ 0,00</b></div>
+        </div>
+      </div>
+
+      <!-- TAB: FACTUREN (Concept 2 layout) -->
+      <div id="panel-invoices" class="tabpanel">
+        <div class="two" id="layout">
+          <svg id="linksLayer"></svg>
+
+          <!-- Facturen -->
+          <div class="panel" id="invPanel">
+            <div class="panelhead">
+              <h2>Facturen</h2>
+              <span class="hint">Klik een factuur</span>
+            </div>
+            <div class="list" id="invList">
+              <table class="stickyhead">
+                <thead>
+                  <tr>
+                    <th style="width:170px;">Factuur</th>
+                    <th style="width:110px;">Datum</th>
+                    <th class="right" style="width:120px;">Bedrag</th>
+                    <th class="right" style="width:120px;">Open</th>
+                    <th style="width:160px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="invRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Betalingen (geen tab, wél kolom) -->
+          <div class="panel" id="payPanel">
+            <div class="panelhead">
+              <h2>Betalingen</h2>
+              <span class="hint">Klik een betaling</span>
+            </div>
+            <div class="list" id="payList">
+              <table class="stickyhead">
+                <thead>
+                  <tr>
+                    <th style="width:190px;">Betaling</th>
+                    <th style="width:110px;">Datum</th>
+                    <th style="width:200px;">Methode</th>
+                    <th class="right" style="width:120px;">Bedrag</th>
+                    <th style="width:160px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="payRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+        <div class="muted" style="font-size:12px;padding:0 16px 16px;">
+          Casussen: <b>1 factuur</b> met <b>meerdere betalingen</b> (501617100120) en <b>1 betaling</b> met <b>meerdere facturen</b> (PAY-20260228-BULK).
+        </div>
+      </div>
+
+      <!-- TAB: BETALINGSREGELINGEN -->
+      <div id="panel-plans" class="tabpanel hidden">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:200px;">Plan</th>
+              <th style="width:240px;">Facturen</th>
+              <th style="width:160px;">Status</th>
+              <th class="right" style="width:140px;">Totaal</th>
+              <th>Termijnen</th>
+            </tr>
+          </thead>
+          <tbody id="planRows"></tbody>
+        </table>
+      </div>
+
+      <!-- TAB: CREDIT/DEBIT -->
+      <div id="panel-credits" class="tabpanel hidden">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:180px;">Credit</th>
+              <th style="width:140px;">Datum toegevoegd</th>
+              <th style="width:160px;">Type</th>
+              <th class="right" style="width:140px;">Bedrag</th>
+              <th style="width:260px;">Status</th>
+              <th>Verrekend met / gepland op</th>
+            </tr>
+          </thead>
+          <tbody id="creditRows"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+  // ===== Helpers =====
+  const euro = n => (n<0?"-":"") + "€ " + Math.abs(n).toFixed(2).replace(".", ",");
+  const fmtDate = d => d.split("-").reverse().join("-");
+  const pill = (label, cls) => `<span class="pill ${cls}"><span class="dot"></span>${label}</span>`;
+
+  // ===== Data (aangesloten op eerdere versie: ids als 5016...) =====
+  const invoices = [
+    {id:"501617100120", docDate:"2026-02-27", amount:115.69, phase:"announced"},
+    {id:"501617100121", docDate:"2026-01-27", amount:146.53, phase:"processing"},
+    {id:"501617100122", docDate:"2025-12-27", amount:120.73, phase:"announced"},
+    {id:"501617100123", docDate:"2025-11-27", amount:135.42, phase:"announced"},
+    {id:"501617100124", docDate:"2025-10-27", amount:129.95, phase:"announced"},
+    {id:"501617100125", docDate:"2025-09-27", amount:141.10, phase:"processing"},
+    {id:"501617100126", docDate:"2025-08-27", amount:135.25, phase:"announced"},
+  ];
+
+  // Betalingen: bevat beide casussen
+  const payments = [
+    // betaling met meerdere facturen
+    {
+      id:"PAY-20260228-BULK",
+      date:"2026-02-28",
+      method:"Bankoverschrijving",
+      status:"Settled",
+      amount:200.00,
+      allocations:[
+        {invoiceId:"501617100123", amount:80.00},
+        {invoiceId:"501617100124", amount:120.00},
+      ]
+    },
+    // factuur (501617100120) met meerdere betalingen
+    {
+      id:"PAY-SHOP-20260220",
+      date:"2026-02-20",
+      method:"Betaling in shop",
+      status:"Settled",
+      amount:60.00,
+      allocations:[{invoiceId:"501617100120", amount:60.00}]
+    },
+    {
+      id:"PAY-DD-20260305",
+      date:"2026-03-05",
+      method:"Incasso (SEPA DD)",
+      status:"Settled",
+      amount:40.00,
+      allocations:[{invoiceId:"501617100120", amount:40.00}]
+    },
+    // pending voorbeeld
+    {
+      id:"PAY-20260219-0001",
+      date:"2026-02-19",
+      method:"Incasso (SEPA DD)",
+      status:"Pending",
+      amount:146.53,
+      allocations:[{invoiceId:"501617100121", amount:146.53}]
+    },
+    // volledig betaald voorbeeld
+    {
+      id:"PAY-20260120-0009",
+      date:"2026-01-20",
+      method:"Incasso (SEPA DD)",
+      status:"Settled",
+      amount:120.73,
+      allocations:[{invoiceId:"501617100122", amount:120.73}]
+    },
+    // deels betaald extra (shop) op 501617100124
+    {
+      id:"PAY-20251210-SHOP",
+      date:"2025-12-10",
+      method:"Betaling in shop",
+      status:"Settled",
+      amount:10.00,
+      allocations:[{invoiceId:"501617100124", amount:10.00}]
+    }
+  ];
+
+  // Betalingsregelingen (2 facturen in 1 plan)
+  const paymentPlans = [
+    {
+      id:"PLAN-SEP-2025-09",
+      invoiceIds:["501617100125","501617100126"],
+      status:"Actief",
+      total:141.10 + 135.25,
+      schedule:[
+        {term:1, dueDate:"2025-10-05", amount:92.12, method:"Incasso", doc:"DD-PLAN-01", status:"Paid"},
+        {term:2, dueDate:"2025-11-05", amount:92.12, method:"Incasso", doc:"DD-PLAN-02", status:"Scheduled"},
+        {term:3, dueDate:"2025-12-05", amount:92.11, method:"Incasso", doc:"DD-PLAN-03", status:"Scheduled"},
+      ]
+    }
+  ];
+
+  // Credits
+  const credits = [
+    { id:"CR-20260105-001", createdDate:"2026-01-05", type:"Credit", amount:15.00, status:"Verrekend", allocations:[{invoiceId:"501617100122", amount:15.00}] },
+    { id:"CR-20260210-002", createdDate:"2026-02-10", type:"Credit", amount:20.00, status:"Verrekend", allocations:[{invoiceId:"501617100120", amount:20.00}] },
+  ];
+
+  // ===== Calculations =====
+  function settledPayments(){ return payments.filter(p => p.status === "Settled"); }
+
+  function planPaidAllocations(){
+    // demo: alleen term 1 als betaald, verdeeld over 2 facturen
+    // (houd dit simpel, want deze tab is niet de focus in concept 2)
+    const allocs = [];
+    for(const plan of paymentPlans){
+      const line = (plan.schedule||[]).find(x => x.status === "Paid");
+      if(!line) continue;
+      // verdeel fixed voor demo
+      allocs.push({invoiceId: plan.invoiceIds[0], amount:47.03, doc:line.doc, date:line.dueDate, planId:plan.id});
+      allocs.push({invoiceId: plan.invoiceIds[1], amount:45.09, doc:line.doc, date:line.dueDate, planId:plan.id});
+    }
+    return allocs;
+  }
+
+  function invoicePaidAmount(invoiceId){
+    let sum = 0;
+
+    for(const p of settledPayments()){
+      for(const a of (p.allocations||[])){
+        if(a.invoiceId === invoiceId) sum += a.amount;
+      }
+    }
+
+    for(const c of credits){
+      if(c.status !== "Verrekend") continue;
+      for(const a of (c.allocations||[])){
+        if(a.invoiceId === invoiceId) sum += a.amount;
+      }
+    }
+
+    for(const a of planPaidAllocations()){
+      if(a.invoiceId === invoiceId) sum += a.amount;
+    }
+
+    return +sum.toFixed(2);
+  }
+
+  function invoiceOpenAmount(inv){
+    return Math.max(0, +(inv.amount - invoicePaidAmount(inv.id)).toFixed(2));
+  }
+
+  function planByInvoiceId(invoiceId){
+    return paymentPlans.find(p => (p.invoiceIds||[]).includes(invoiceId));
+  }
+
+  function invoiceHasShopPayment(invoiceId){
+    return payments.some(p =>
+      p.status === "Settled" &&
+      (p.method||"").toLowerCase().includes("betaling in shop") &&
+      (p.allocations||[]).some(a => a.invoiceId === invoiceId && a.amount > 0)
+    );
+  }
+
+  function invoiceStatus(inv){
+    const open = invoiceOpenAmount(inv);
+    if(open === 0) return {key:"paid", label:"Betaald"};
+    if(open > 0 && invoiceHasShopPayment(inv.id)) return {key:"partial", label:"Deels betaald"};
+    if(planByInvoiceId(inv.id)) return {key:"processing", label:"In behandeling"};
+    if(inv.phase === "announced") return {key:"announced", label:"Aangekondigd"};
+    if(inv.phase === "rejected") return {key:"rejected", label:"Afgewezen"};
+    return {key:"processing", label:"In behandeling"};
+  }
+
+  function paymentStatusPill(p){
+    if(p.status === "Settled") return pill("Verwerkt","success");
+    if(p.status === "Pending") return pill("In verwerking","warning");
+    if(p.status === "Rejected") return pill("Afgewezen","danger");
+    return pill(p.status,"neutral");
+  }
+
+  function computeOpenTotal(){
+    return invoices.reduce((s, inv) => s + invoiceOpenAmount(inv), 0);
+  }
+
+  // ===== Concept 2 rendering + linking =====
+  function relatedPaymentsForInvoice(invoiceId){
+    const rel = [];
+    for(const p of payments){
+      for(const a of (p.allocations||[])){
+        if(a.invoiceId === invoiceId){
+          rel.push({ paymentId: p.id, amount: a.amount });
+        }
+      }
+    }
+    return rel;
+  }
+
+  function relatedInvoicesForPayment(paymentId){
+    const p = payments.find(x => x.id === paymentId);
+    if(!p) return [];
+    return (p.allocations||[]).map(a => ({ invoiceId: a.invoiceId, amount: a.amount }));
+  }
+
+  function rowEl(type, id){
+    return document.querySelector(`tr[data-type="${type}"][data-id="${CSS.escape(id)}"]`);
+  }
+
+  function clearHighlights(){
+    document.querySelectorAll(".row.selected,.row.related").forEach(el => el.classList.remove("selected","related"));
+  }
+
+  function centerRight(el, root){
+    const r = el.getBoundingClientRect();
+    const rr = root.getBoundingClientRect();
+    return { x: r.right - rr.left, y: (r.top + r.bottom)/2 - rr.top };
+  }
+  function centerLeft(el, root){
+    const r = el.getBoundingClientRect();
+    const rr = root.getBoundingClientRect();
+    return { x: r.left - rr.left, y: (r.top + r.bottom)/2 - rr.top };
+  }
+
+  function drawLines(pairs){
+    const svg = document.getElementById("linksLayer");
+    const root = document.getElementById("layout");
+    const rr = root.getBoundingClientRect();
+
+    svg.setAttribute("viewBox", `0 0 ${rr.width} ${rr.height}`);
+    svg.setAttribute("width", rr.width);
+    svg.setAttribute("height", rr.height);
+
+    const defs = `
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(37,99,235,.65)"></path>
+        </marker>
+      </defs>
+    `;
+    const paths = pairs.map(p => {
+      const a = centerRight(p.fromEl, root);
+      const b = centerLeft(p.toEl, root);
+      const midX = (a.x + b.x)/2;
+      const d = `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
+      return `
+        <path d="${d}" fill="none" stroke="rgba(37,99,235,.55)" stroke-width="2.5" marker-end="url(#arrow)"></path>
+        <text x="${midX}" y="${(a.y+b.y)/2 - 6}" fill="rgba(30,64,175,.9)" font-size="11" text-anchor="middle">${p.label}</text>
+      `;
+    }).join("");
+
+    svg.innerHTML = defs + paths;
+  }
+  function clearLines(){ document.getElementById("linksLayer").innerHTML = ""; }
+
+  let currentSelection = null; // {type,id}
+
+  function selectInvoice(invoiceId){
+    currentSelection = {type:"invoice", id:invoiceId};
+    clearHighlights(); clearLines();
+
+    const invRow = rowEl("invoice", invoiceId);
+    if(!invRow) return;
+    invRow.classList.add("selected");
+
+    const relPays = relatedPaymentsForInvoice(invoiceId);
+    const pairs = [];
+    for(const rp of relPays){
+      const payRow = rowEl("payment", rp.paymentId);
+      if(payRow){
+        payRow.classList.add("related");
+        pairs.push({fromEl: invRow, toEl: payRow, label: euro(rp.amount)});
+      }
+    }
+    if(window.matchMedia("(min-width: 981px)").matches) drawLines(pairs);
+  }
+
+  function selectPayment(paymentId){
+    currentSelection = {type:"payment", id:paymentId};
+    clearHighlights(); clearLines();
+
+    const payRow = rowEl("payment", paymentId);
+    if(!payRow) return;
+    payRow.classList.add("selected");
+
+    const relInvs = relatedInvoicesForPayment(paymentId);
+    const pairs = [];
+    for(const ri of relInvs){
+      const invRow = rowEl("invoice", ri.invoiceId);
+      if(invRow){
+        invRow.classList.add("related");
+        pairs.push({fromEl: invRow, toEl: payRow, label: euro(ri.amount)});
+      }
+    }
+    if(window.matchMedia("(min-width: 981px)").matches) drawLines(pairs);
+  }
+
+  function refreshLines(){
+    if(!currentSelection) return;
+    if(document.getElementById("panel-invoices").classList.contains("hidden")) return;
+    if(currentSelection.type === "invoice") selectInvoice(currentSelection.id);
+    else selectPayment(currentSelection.id);
+  }
+
+  function renderConcept2(filterText=""){
+    const q = filterText.trim().toLowerCase();
+
+    const invFiltered = [...invoices]
+      .filter(i => i.id.toLowerCase().includes(q) || "factuur".includes(q))
+      .sort((a,b) => b.docDate.localeCompare(a.docDate));
+
+    const payFiltered = [...payments]
+      .filter(p => p.id.toLowerCase().includes(q) || p.method.toLowerCase().includes(q))
+      .sort((a,b) => b.date.localeCompare(a.date));
+
+    document.getElementById("invRows").innerHTML = invFiltered.map(inv => {
+      const st = invoiceStatus(inv);
+      const open = invoiceOpenAmount(inv);
+      return `
+        <tr class="row" data-type="invoice" data-id="${inv.id}">
+          <td class="mono">${inv.id}</td>
+          <td>${fmtDate(inv.docDate)}</td>
+          <td class="right mono amount">${euro(inv.amount)}</td>
+          <td class="right mono amount">${euro(open)}</td>
+          <td>${pill(st.label, st.key)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    document.getElementById("payRows").innerHTML = payFiltered.map(p => `
+      <tr class="row" data-type="payment" data-id="${p.id}">
+        <td class="mono">${p.id}</td>
+        <td>${fmtDate(p.date)}</td>
+        <td>${p.method}</td>
+        <td class="right mono amount">${euro(p.amount)}</td>
+        <td>${paymentStatusPill(p)}</td>
+      </tr>
+    `).join("");
+
+    document.getElementById("openTotal").textContent = euro(computeOpenTotal());
+
+    document.querySelectorAll('tr[data-type="invoice"]').forEach(tr => tr.onclick = () => selectInvoice(tr.dataset.id));
+    document.querySelectorAll('tr[data-type="payment"]').forEach(tr => tr.onclick = () => selectPayment(tr.dataset.id));
+  }
+
+  // ===== Plans / Credits rendering =====
+  function renderPlans(filterText=""){
+    const q = filterText.trim().toLowerCase();
+    const filtered = paymentPlans.filter(p =>
+      p.id.toLowerCase().includes(q) ||
+      (p.invoiceIds||[]).some(id => id.toLowerCase().includes(q)) ||
+      (p.status||"").toLowerCase().includes(q)
+    );
+
+    document.getElementById("planRows").innerHTML = filtered.map(plan => {
+      const invLinks = (plan.invoiceIds||[]).map(id => `<a class="mono" href="javascript:void(0)" onclick="switchToInvoicesAndSelect('${id}')">${id}</a>`).join(", ");
+      return `
+        <tr id="plan-${plan.id}">
+          <td class="mono">${plan.id}</td>
+          <td>${invLinks}</td>
+          <td>${pill(plan.status,"neutral")}</td>
+          <td class="right mono amount">${euro(plan.total)}</td>
+          <td>
+            <details open>
+              <summary class="muted" style="cursor:pointer">Termijnen</summary>
+              <div class="tx">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:90px;">Termijn</th>
+                      <th style="width:120px;">Vervaldatum</th>
+                      <th style="width:160px;">Methode</th>
+                      <th style="width:160px;">Afschrijving</th>
+                      <th class="right" style="width:120px;">Bedrag</th>
+                      <th style="width:220px;">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(plan.schedule||[]).map(s => `
+                      <tr>
+                        <td class="mono">${s.term}</td>
+                        <td>${fmtDate(s.dueDate)}</td>
+                        <td>${s.method}</td>
+                        <td class="mono">${s.doc}</td>
+                        <td class="right mono amount">${euro(-Math.abs(s.amount))}</td>
+                        <td>${s.status==="Paid" ? pill("Betaald","success") : pill(s.status==="Scheduled"?"Gepland":s.status,"neutral")}</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    document.getElementById("openTotal").textContent = euro(computeOpenTotal());
+  }
+
+  function renderCredits(filterText=""){
+    const q = filterText.trim().toLowerCase();
+    const filtered = credits.filter(c =>
+      c.id.toLowerCase().includes(q) ||
+      (c.status||"").toLowerCase().includes(q) ||
+      (c.allocations||[]).some(a => a.invoiceId.toLowerCase().includes(q))
+    );
+
+    document.getElementById("creditRows").innerHTML = filtered.map(c => {
+      const linkHtml = `<ul style="margin:0; padding-left:18px;">
+        ${(c.allocations||[]).map(a => `
+          <li>Factuur <a class="mono" href="javascript:void(0)" onclick="switchToInvoicesAndSelect('${a.invoiceId}')">${a.invoiceId}</a> — <span class="mono">${euro(a.amount)}</span></li>
+        `).join("")}
+      </ul>`;
+      return `
+        <tr id="cr-${c.id}">
+          <td class="mono">${c.id}</td>
+          <td>${fmtDate(c.createdDate)}</td>
+          <td>${c.type}</td>
+          <td class="right mono amount">${euro(c.amount)}</td>
+          <td>${c.status==="Verrekend" ? pill("Verrekend","success") : pill(c.status,"neutral")}</td>
+          <td>${linkHtml}</td>
+        </tr>
+      `;
+    }).join("");
+
+    document.getElementById("openTotal").textContent = euro(computeOpenTotal());
+  }
+
+  // ===== Tabs =====
+  function setActiveTab(tab){
+    const map = [
+      ["invoices","tab-invoices","panel-invoices"],
+      ["plans","tab-plans","panel-plans"],
+      ["credits","tab-credits","panel-credits"],
+    ];
+    for(const [key, btnId, panelId] of map){
+      const isActive = (tab === key);
+      document.getElementById(btnId).classList.toggle("active", isActive);
+      document.getElementById(btnId).setAttribute("aria-selected", isActive ? "true" : "false");
+      document.getElementById(panelId).classList.toggle("hidden", !isActive);
+    }
+
+    const q = document.getElementById("q").value;
+    if(tab === "invoices") renderConcept2(q);
+    if(tab === "plans") renderPlans(q);
+    if(tab === "credits") renderCredits(q);
+  }
+
+  function switchToInvoicesAndSelect(invoiceId){
+    setActiveTab("invoices");
+    // kleine timeout zodat DOM zeker klaar is
+    setTimeout(() => {
+      selectInvoice(invoiceId);
+      const el = rowEl("invoice", invoiceId);
+      if(el) el.scrollIntoView({behavior:"smooth", block:"center"});
+    }, 0);
+  }
+  window.switchToInvoicesAndSelect = switchToInvoicesAndSelect;
+
+  // ===== Search routing =====
+  document.getElementById("q").addEventListener("input", (e) => {
+    const q = e.target.value;
+    const isInv = !document.getElementById("panel-invoices").classList.contains("hidden");
+    const isPlans = !document.getElementById("panel-plans").classList.contains("hidden");
+    if(isInv){ currentSelection=null; clearHighlights(); clearLines(); renderConcept2(q); }
+    else if(isPlans){ renderPlans(q); }
+    else { renderCredits(q); }
+  });
+
+  document.getElementById("tab-invoices").addEventListener("click", () => { currentSelection=null; clearHighlights(); clearLines(); setActiveTab("invoices"); });
+  document.getElementById("tab-plans").addEventListener("click", () => setActiveTab("plans"));
+  document.getElementById("tab-credits").addEventListener("click", () => setActiveTab("credits"));
+
+  // keep lines attached on scroll/resize
+  document.getElementById("invList").addEventListener("scroll", refreshLines, {passive:true});
+  document.getElementById("payList").addEventListener("scroll", refreshLines, {passive:true});
+  window.addEventListener("resize", refreshLines);
+
+  // init
+  setActiveTab("invoices");
+  // preselect a casus
+  setTimeout(() => selectInvoice("501617100120"), 0);
+</script>
+</body>
+</html>
